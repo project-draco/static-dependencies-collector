@@ -9,6 +9,7 @@ import com.github.javaparser.ast.type.*;
 import com.github.javaparser.ast.visitor.*;
 import com.github.javaparser.resolution.declarations.*;
 import com.github.javaparser.resolution.types.*;
+import com.github.javaparser.symbolsolver.*;
 import com.github.javaparser.symbolsolver.core.resolution.*;
 import com.github.javaparser.symbolsolver.javaparser.*;
 import com.github.javaparser.symbolsolver.javaparsermodel.*;
@@ -28,6 +29,7 @@ public class Main {
         for (String s : args) {
             File f = new File(s);
             JavaParserTypeSolver jpts = new JavaParserTypeSolver(f);
+            JavaSymbolSolver jss = new JavaSymbolSolver(jpts);
 
             Method m = jpts.getClass().getDeclaredMethod("parseDirectory", File.class);
             m.setAccessible(true);
@@ -37,6 +39,7 @@ public class Main {
 
             VoidVisitor<JavaParserFacade> visitor = new StaticDependencyPrinter();
             for (CompilationUnit cu : cus) {
+                jss.inject(cu);
                 visitor.visit(cu, JavaParserFacade.get(typeSolver));
             }
         }
@@ -52,8 +55,8 @@ public class Main {
             if (!ref.isSolved()) return;
             String cupath = getCompilationUnitPath(findCompilationUnit(mc, jp));
             if (cupath.length() == 0) return;
-            MethodDeclaration md = mc.findParent(MethodDeclaration.class).get();
-            System.out.print(fullQualifiedSignature(md, jp) + " ");
+            BodyDeclaration bd = mc.findParent(BodyDeclaration.class).get();
+            System.out.print(fullQualifiedSignature(bd, jp) + " ");
             ResolvedMethodDeclaration rmd = ref.getCorrespondingDeclaration();
             System.out.print(cupath);
             System.out.println(rmd.getQualifiedSignature());
@@ -66,8 +69,8 @@ public class Main {
             if (!ref.isSolved()) return;
             String cupath = getCompilationUnitPath(findCompilationUnit(fa, jp));
             if (cupath.length() == 0) return;
-            MethodDeclaration md = fa.findParent(MethodDeclaration.class).get();
-            System.out.print(fullQualifiedSignature(md, jp) + " ");
+            BodyDeclaration bd = fa.findParent(BodyDeclaration.class).get();
+            System.out.print(fullQualifiedSignature(bd, jp) + " ");
             ResolvedFieldDeclaration rfd = ref.getCorrespondingDeclaration();
             System.out.print(cupath);
             System.out.println(rfd.declaringType().getQualifiedName() + "." + fa.getName().getId());
@@ -78,8 +81,8 @@ public class Main {
             super.visit(ne, jp);
             SymbolReference<? extends ResolvedValueDeclaration> ref = jp.solve(ne);
             if (!ref.isSolved() || !ref.getCorrespondingDeclaration().isField()) { return; }
-            MethodDeclaration md = ne.findParent(MethodDeclaration.class).get();
-            System.out.print(fullQualifiedSignature(md, jp) + " ");
+            BodyDeclaration bd = ne.findParent(BodyDeclaration.class).get();
+            System.out.print(fullQualifiedSignature(bd, jp) + " ");
             System.out.print(getCompilationUnitPath(ne.findCompilationUnit()));
             ResolvedFieldDeclaration rfd = ref.getCorrespondingDeclaration().asField();
             System.out.println(rfd.declaringType().getQualifiedName() + "." + ne.getName().getId());
@@ -100,9 +103,18 @@ public class Main {
         return SymbolReference.unsolved(ResolvedFieldDeclaration.class);
     }
 
-    private static String fullQualifiedSignature(MethodDeclaration md, JavaParserFacade jp) {
-        ResolvedMethodDeclaration callingRmd = new JavaParserMethodDeclaration(md, jp.getTypeSolver());
-        return getCompilationUnitPath(md.findCompilationUnit()) + callingRmd.getQualifiedSignature();
+    private static String fullQualifiedSignature(BodyDeclaration bd, JavaParserFacade jp) {
+        if (bd instanceof MethodDeclaration) {
+            ResolvedMethodDeclaration callingRmd =
+                new JavaParserMethodDeclaration((MethodDeclaration) bd, jp.getTypeSolver());
+            return getCompilationUnitPath(bd.findCompilationUnit()) + callingRmd.getQualifiedSignature();
+        } else if (bd instanceof FieldDeclaration) {
+            ResolvedFieldDeclaration fd =
+                new JavaParserFieldDeclaration(((FieldDeclaration) bd).getVariable(0), jp.getTypeSolver());
+            return getCompilationUnitPath(bd.findCompilationUnit()) +
+                fd.declaringType().getQualifiedName() + "." + fd.getName();
+        }
+        return "<unsupported> " + bd.getClass();
     }
 
     private static Collection<ResolvedReferenceTypeDeclaration> findTypeDeclarations(

@@ -2,7 +2,9 @@ import java.util.*;
 
 class Zum {
 
-    public int f;
+    public int f = m(null);
+    public int g = f;
+    public int h = this.g;
 
     public int m(Collection<String> i) {
         System.out.println("");
