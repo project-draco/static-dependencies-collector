@@ -9,4 +9,10 @@ class Zum {
         return i;
     }
 
+    public int r(String s) {
+        f = 0;
+        System.out.println(f);
+        return m(null);
+    }
+
 }

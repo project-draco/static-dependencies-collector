@@ -35,16 +35,14 @@ public class Main {
 
             TypeSolver typeSolver = new CombinedTypeSolver(new ReflectionTypeSolver(), jpts);
 
-            VoidVisitor<JavaParserFacade> methodCallVisitor = new MethodCallPrinter();
-            VoidVisitor<JavaParserFacade> fieldAccessVisitor = new FieldAccessPrinter();
+            VoidVisitor<JavaParserFacade> visitor = new StaticDependencyPrinter();
             for (CompilationUnit cu : cus) {
-                methodCallVisitor.visit(cu, JavaParserFacade.get(typeSolver));
-                fieldAccessVisitor.visit(cu, JavaParserFacade.get(typeSolver));
+                visitor.visit(cu, JavaParserFacade.get(typeSolver));
             }
         }
     }
 
-    private static class MethodCallPrinter extends VoidVisitorAdapter<JavaParserFacade> {
+    private static class StaticDependencyPrinter extends VoidVisitorAdapter<JavaParserFacade> {
 
         @Override
         public void visit(MethodCallExpr mc, JavaParserFacade jp) {
@@ -60,9 +58,6 @@ public class Main {
             System.out.print(cupath);
             System.out.println(rmd.getQualifiedSignature());
         }
-    }
-
-    private static class FieldAccessPrinter extends VoidVisitorAdapter<JavaParserFacade> {
 
         @Override
         public void visit(FieldAccessExpr fa, JavaParserFacade jp) {
@@ -77,13 +72,25 @@ public class Main {
             System.out.print(cupath);
             System.out.println(rfd.declaringType().getQualifiedName() + "." + fa.getName().getId());
         }
+
+        @Override
+        public void visit(NameExpr ne, JavaParserFacade jp) {
+            super.visit(ne, jp);
+            SymbolReference<? extends ResolvedValueDeclaration> ref = jp.solve(ne);
+            if (!ref.isSolved() || !ref.getCorrespondingDeclaration().isField()) { return; }
+            MethodDeclaration md = ne.findParent(MethodDeclaration.class).get();
+            System.out.print(fullQualifiedSignature(md, jp) + " ");
+            System.out.print(getCompilationUnitPath(ne.findCompilationUnit()));
+            ResolvedFieldDeclaration rfd = ref.getCorrespondingDeclaration().asField();
+            System.out.println(rfd.declaringType().getQualifiedName() + "." + ne.getName().getId());
+        }
     }
 
     private static SymbolReference<ResolvedFieldDeclaration> solve(FieldAccessExpr fa, JavaParserFacade jp) {
         TypeSolver typeSolver = jp.getTypeSolver();
         FieldAccessContext ctx = ((FieldAccessContext) JavaParserFactory.getContext(fa, typeSolver));
-        Expression scope = fa.getScope();
-        Collection<ResolvedReferenceTypeDeclaration> rt = findTypeDeclarations(scope, ctx, jp);
+        Optional<Expression> scope = Optional.of(fa.getScope());
+        Collection<ResolvedReferenceTypeDeclaration> rt = findTypeDeclarations(fa, scope, ctx, jp);
         for (ResolvedReferenceTypeDeclaration r : rt) {
             try {
                 return SymbolReference.solved(r.getField(fa.getName().getId()));
@@ -99,35 +106,39 @@ public class Main {
     }
 
     private static Collection<ResolvedReferenceTypeDeclaration> findTypeDeclarations(
-            Expression scope, Context ctx, JavaParserFacade jp) {
+            Node node, Optional<Expression> scope, Context ctx, JavaParserFacade jp) {
         Collection<ResolvedReferenceTypeDeclaration> rt = new ArrayList<>();
         TypeSolver typeSolver = jp.getTypeSolver();
         SymbolReference<ResolvedTypeDeclaration> ref = null;
-        if (scope instanceof NameExpr) {
-            NameExpr scopeAsName = (NameExpr) scope;
-            ref = ctx.solveType(scopeAsName.getName().getId(), typeSolver);
-        }
-        if (ref == null || !ref.isSolved()) {
-            ResolvedType typeOfScope = jp.getType(scope);
-            if (typeOfScope.isWildcard()) {
-                if (typeOfScope.asWildcard().isExtends() || typeOfScope.asWildcard().isSuper()) {
-                    rt.add(typeOfScope.asWildcard().getBoundedType().asReferenceType().getTypeDeclaration());
-                } else {
+        if (scope.isPresent()) {
+            if (scope.get() instanceof NameExpr) {
+                NameExpr scopeAsName = (NameExpr) scope.get();
+                ref = ctx.solveType(scopeAsName.getName().getId(), typeSolver);
+            }
+            if (ref == null || !ref.isSolved()) {
+                ResolvedType typeOfScope = jp.getType(scope.get());
+                if (typeOfScope.isWildcard()) {
+                    if (typeOfScope.asWildcard().isExtends() || typeOfScope.asWildcard().isSuper()) {
+                        rt.add(typeOfScope.asWildcard().getBoundedType().asReferenceType().getTypeDeclaration());
+                    } else {
+                        rt.add(new ReflectionClassDeclaration(Object.class, typeSolver).asReferenceType());
+                    }
+                } else if (typeOfScope.isArray()) {
                     rt.add(new ReflectionClassDeclaration(Object.class, typeSolver).asReferenceType());
+                } else if (typeOfScope.isTypeVariable()) {
+                    for (ResolvedTypeParameterDeclaration.Bound bound : typeOfScope.asTypeParameter().getBounds()) {
+                        rt.add(bound.getType().asReferenceType().getTypeDeclaration());
+                    }
+                } else if (typeOfScope.isConstraint()) {
+                    rt.add(typeOfScope.asConstraintType().getBound().asReferenceType().getTypeDeclaration());
+                } else {
+                    rt.add(typeOfScope.asReferenceType().getTypeDeclaration());
                 }
-            } else if (typeOfScope.isArray()) {
-                rt.add(new ReflectionClassDeclaration(Object.class, typeSolver).asReferenceType());
-            } else if (typeOfScope.isTypeVariable()) {
-                for (ResolvedTypeParameterDeclaration.Bound bound : typeOfScope.asTypeParameter().getBounds()) {
-                    rt.add(bound.getType().asReferenceType().getTypeDeclaration());
-                }
-            } else if (typeOfScope.isConstraint()) {
-                rt.add(typeOfScope.asConstraintType().getBound().asReferenceType().getTypeDeclaration());
             } else {
-                rt.add(typeOfScope.asReferenceType().getTypeDeclaration());
+                rt.add(ref.getCorrespondingDeclaration().asReferenceType());
             }
         } else {
-            rt.add(ref.getCorrespondingDeclaration().asReferenceType());
+             rt.add(jp.getTypeOfThisIn(node).asReferenceType().getTypeDeclaration());
         }
         return rt;
     }
@@ -139,19 +150,18 @@ public class Main {
 
     private static Optional<CompilationUnit> findCompilationUnit(MethodCallExpr mc, JavaParserFacade jp) {
         Optional<Expression> scope = mc.getScope();
-        if (!scope.isPresent()) return Optional.empty();
         Context ctx = JavaParserFactory.getContext(mc, jp.getTypeSolver());
-        return findCompilationUnit(scope.get(), ctx, jp);
+        return findCompilationUnit(mc, scope, ctx, jp);
     }
 
     private static Optional<CompilationUnit> findCompilationUnit(FieldAccessExpr fa, JavaParserFacade jp) {
-        Expression scope =fa.getScope();
+        Optional<Expression> scope = Optional.of(fa.getScope());
         Context ctx = JavaParserFactory.getContext(fa, jp.getTypeSolver());
-        return findCompilationUnit(scope, ctx, jp);
+        return findCompilationUnit(fa, scope, ctx, jp);
     }
 
-    private static Optional<CompilationUnit> findCompilationUnit(Expression scope, Context ctx, JavaParserFacade jp) {
-        Collection<ResolvedReferenceTypeDeclaration> rt = findTypeDeclarations(scope, ctx, jp);
+    private static Optional<CompilationUnit> findCompilationUnit(Node node, Optional<Expression> scope, Context ctx, JavaParserFacade jp) {
+        Collection<ResolvedReferenceTypeDeclaration> rt = findTypeDeclarations(node, scope, ctx, jp);
         for (ResolvedReferenceTypeDeclaration r : rt) {
             try {
                 return findCompilationUnit(r);
