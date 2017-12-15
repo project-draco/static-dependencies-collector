@@ -1,7 +1,7 @@
 import java.util.*;
 
 class Zum {
-
+/*
     public int f = m(null);
     public int g = f;
     public int h = this.g;
@@ -16,5 +16,6 @@ class Zum {
         System.out.println(f);
         return m(null);
     }
+*/
 
 }
