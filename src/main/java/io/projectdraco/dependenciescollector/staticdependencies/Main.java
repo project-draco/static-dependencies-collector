@@ -28,9 +28,14 @@ import java.util.*;
 import java.util.stream.*;
 import java.util.function.*;
 
+import static java.util.stream.Collectors.joining;
+
 public class Main {
 
+    private static String[] mainArgs;
+
     public static void main(String[] args) throws Exception {
+        mainArgs = args;
         for (String s : args) {
             File f = new File(s);
             JavaParserTypeSolver jpts = new JavaParserTypeSolver(f);
@@ -139,7 +144,7 @@ public class Main {
         @Override
         public void visit(ClassOrInterfaceDeclaration coid, TypeSolvers ts) {
             super.visit(coid, ts);
-            if (coid.isInterface() || coid.isLocalClassDeclaration() /*|| coid.isInnerClass()*/) {
+            if (coid.isInterface() || coid.isLocalClassDeclaration()) {
                 return;
             }
             for (ClassOrInterfaceType coit : coid.getExtendedTypes()) {
@@ -237,6 +242,7 @@ public class Main {
                     msg = e.getCause().toString();
                 }
                 System.err.println/*throw new RuntimeException*/("Cannot solve method call " + mc + " " + msg + " " + mc.findCompilationUnit().get().getStorage().get().getPath()/*, e*/);
+                return;
             }
             if (ref == null || !ref.isSolved()) return;
             String cupath = getCompilationUnitPath(findCompilationUnit(mc, jp));
@@ -245,7 +251,11 @@ public class Main {
             System.out.print(fullQualifiedSignature(bd, jp) + " ");
             ResolvedMethodDeclaration rmd = ref.getCorrespondingDeclaration();
             System.out.print(cupath);
-            System.out.println(rmd.getQualifiedSignature());
+            String methodType = "/[MT]/";
+            if (rmd.declaringType().getName().toString().equals(rmd.getName().toString())) {
+                methodType = "/[CS]/";
+            }
+            System.out.println(rmd.declaringType().getName() + methodType + describeParameters(rmd));
         }
 
         @Override
@@ -256,14 +266,17 @@ public class Main {
             String cupath = getCompilationUnitPath(findCompilationUnit(fa, jp));
             if (cupath.length() == 0) return;
             BodyDeclaration bd = fa.findParent(BodyDeclaration.class).get();
-            System.out.print(fullQualifiedSignature(bd, jp) + " ");
             ResolvedFieldDeclaration rfd = ref.getCorrespondingDeclaration();
-            System.out.print(cupath);
+            ResolvedTypeDeclaration dt =  null;
             try {
-                System.out.println(rfd.declaringType().getQualifiedName() + "." + fa.getName().getId());
+                dt = rfd.declaringType();
             } catch (Exception e) {
                 System.err.println("Cannot solve field access " + fa);
+                return;
             }
+            System.out.print(fullQualifiedSignature(bd, jp) + " ");
+            System.out.print(cupath);
+            System.out.println(dt.getName() + "/[FE]/" + fa.getName().getId());
         }
 
         @Override
@@ -279,15 +292,18 @@ public class Main {
             }
             if (!ref.isSolved() || !ref.getCorrespondingDeclaration().isField()) { return; }
             BodyDeclaration bd = ne.findParent(BodyDeclaration.class).get();
-            System.out.print(fullQualifiedSignature(bd, jp) + " ");
-            System.out.print(getCompilationUnitPath(ne.findCompilationUnit()));
             ResolvedFieldDeclaration rfd = ref.getCorrespondingDeclaration().asField();
+            ResolvedTypeDeclaration dt = null;
             try {
-                System.out.println(rfd.declaringType().getQualifiedName() + "." + ne.getName().getId());
+                dt = rfd.declaringType();
             } catch (Exception e) {
                 // TODO: verify why the ne is empty
                 System.err.println("Empty name expression " + ne);
+                return;
             }
+            System.out.print(fullQualifiedSignature(bd, jp) + " ");
+            System.out.print(getCompilationUnitPath(ne.findCompilationUnit()));
+            System.out.println(dt.getName() + "/[FE]/" + ne.getName().getId());
         }
     }
 
@@ -314,18 +330,43 @@ public class Main {
         if (bd instanceof MethodDeclaration) {
             ResolvedMethodDeclaration callingRmd =
                 new JavaParserMethodDeclaration((MethodDeclaration) bd, jp.getTypeSolver());
-            try {
-                return getCompilationUnitPath(bd.findCompilationUnit()) + callingRmd.getQualifiedSignature();
-            } catch (Exception e) {
-                return getCompilationUnitPath(bd.findCompilationUnit()) + ((MethodDeclaration) bd).getSignature();
-            }
+            return getCompilationUnitPath(bd.findCompilationUnit()) +
+                callingRmd.declaringType().getName() + "/[MT]/" +describeParameters((MethodDeclaration) bd);
         } else if (bd instanceof FieldDeclaration) {
             ResolvedFieldDeclaration fd =
                 new JavaParserFieldDeclaration(((FieldDeclaration) bd).getVariable(0), jp.getTypeSolver());
             return getCompilationUnitPath(bd.findCompilationUnit()) +
-                fd.declaringType().getQualifiedName() + "." + fd.getName();
+                fd.declaringType().getName() + "/[FE]/" + fd.getName();
+        } else if (bd instanceof ConstructorDeclaration) {
+            return getCompilationUnitPath(bd.findCompilationUnit()) +
+                ((ConstructorDeclaration) bd).getName() + "/[CS]/" +describeParameters((ConstructorDeclaration) bd);
         }
         return "<unsupported> " + bd.getClass();
+    }
+
+    private static String describeParameters(MethodDeclaration md) {
+        return md.getSignature().getParameterTypes().stream()
+            .map(t -> t.asString()).collect(joining(",", md.getName() + "(", ")"));
+    }
+
+    private static String describeParameters(ConstructorDeclaration cd) {
+        return cd.getParameters().stream()
+            .map(p -> p.getType().asString()).collect(joining(",", cd.getName() + "(", ")"));
+    }
+
+    private static String describeParameters(ResolvedMethodDeclaration md) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(md.getName());
+        sb.append("(");
+        for (int i = 0; i < md.getNumberOfParams(); i++) {
+            if (i != 0) {
+                sb.append(",");
+            }
+            String[] arr = md.getParam(i).getType().describe().split("\\.");
+            sb.append(arr[arr.length-1]);
+        }
+        sb.append(")");
+        return sb.toString();
     }
 
     private static Collection<ResolvedReferenceTypeDeclaration> findTypeDeclarations(
@@ -421,7 +462,12 @@ public class Main {
 
     private static String getCompilationUnitPath(Optional<CompilationUnit> cu) {
         if (!cu.isPresent() || !cu.get().getStorage().isPresent()) return "";
-        return cu.get().getStorage().get().getPath().toString().replaceAll("/", "_") + "/[CN]/";
+        String path = cu.get().getStorage().get().getPath().toString();
+        for (String s : mainArgs) {
+            path = path.replace(s, "");
+        }
+        if (path.length() > 0 && path.charAt(0) == '/') path = path.substring(1);
+        return path.replaceAll("/", "_") + "/[CN]/";
     }
 
     private static Optional<CompilationUnit> findCompilationUnit(MethodCallExpr mc, JavaParserFacade jp) {

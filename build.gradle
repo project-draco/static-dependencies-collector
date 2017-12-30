@@ -16,12 +16,13 @@ repositories {
     // Use 'jcenter' for resolving your dependencies.
     // You can declare any Maven/Ivy/file repository here.
     jcenter()
+    mavenLocal()
 }
 
 // In this section you declare the dependencies for your production and test code
 dependencies {
-    compile group: 'com.github.javaparser', name: 'javaparser-core', version: '3.5.5'
-    compile group: 'com.github.javaparser', name: 'java-symbol-solver-core', version: '0.6.2'
+    compile group: 'com.github.javaparser', name: 'javaparser-core', version: '3.5.6-SNAPSHOT'
+    compile group: 'com.github.javaparser', name: 'java-symbol-solver-core', version: '0.6.4-SNAPSHOT'
     // The production code uses the SLF4J logging API at compile time
     // compile 'org.slf4j:slf4j-api:1.7.21'
 
