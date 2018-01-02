@@ -36,30 +36,33 @@ public class Main {
 
     public static void main(String[] args) throws Exception {
         mainArgs = args;
+        TypeSolvers typeSolvers = new TypeSolvers();
+        typeSolvers.typeSolver = new CombinedTypeSolver(new ReflectionTypeSolver());
+        typeSolvers.externalTypeSolver = new MemoryTypeSolver() {
+            public SymbolReference<ResolvedReferenceTypeDeclaration> tryToSolveType(String name) {
+                SymbolReference<ResolvedReferenceTypeDeclaration> result = super.tryToSolveType(name);
+                if (!result.isSolved()) {
+                    String[] arr = name.split("\\.");
+                    result = super.tryToSolveType(arr[arr.length-1]);
+                }
+                return result;
+            }
+        };
+
+        Function<String, Stream<CompilationUnit>> ss = (s) -> walk(Paths.get(s))
+            .filter(p -> p.toString().endsWith(".java"))
+            .map(p -> parse(p.toAbsolutePath().toString()));
+
         for (String s : args) {
             File f = new File(s);
             JavaParserTypeSolver jpts = new JavaParserTypeSolver(f);
             JavaSymbolSolver jss = new JavaSymbolSolver(jpts);
+            typeSolvers.typeSolver.add(jpts);
 
-            TypeSolvers typeSolvers = new TypeSolvers();
-            typeSolvers.typeSolver = new CombinedTypeSolver(new ReflectionTypeSolver(), jpts);
-            typeSolvers.externalTypeSolver = new MemoryTypeSolver() {
-                public SymbolReference<ResolvedReferenceTypeDeclaration> tryToSolveType(String name) {
-                    SymbolReference<ResolvedReferenceTypeDeclaration> result = super.tryToSolveType(name);
-                    if (!result.isSolved()) {
-                        String[] arr = name.split("\\.");
-                        result = super.tryToSolveType(arr[arr.length-1]);
-                    }
-                    return result;
-                }
-            };
-
-            Supplier<Stream<CompilationUnit>> ss = () -> walk(Paths.get(s))
-                .filter(p -> p.toString().endsWith(".java"))
-                .map(p -> parse(p.toAbsolutePath().toString()));
             // collect external superclasses and interfaces
             VoidVisitor<TypeSolvers> externalDeclarationsVisitor = new ExternalDeclarationVisitor();
-            ss.get().forEach(cu -> {
+            ss.apply(s).forEach(cu -> {
+                // jss.inject(cu);
                 externalDeclarationsVisitor.visit(cu, typeSolvers);
                 if (cu.getImports() != null) {
                     for (ImportDeclaration imp : cu.getImports()) {
@@ -72,11 +75,12 @@ public class Main {
                     }
                 }
             });
-            typeSolvers.typeSolver.add(typeSolvers.externalTypeSolver);
+        }
+        typeSolvers.typeSolver.add(typeSolvers.externalTypeSolver);
+        for (String s : args) {
             // run printer visitor
             VoidVisitor<JavaParserFacade> visitor = new StaticDependencyPrinter();
-            ss.get().forEach(cu -> {
-                jss.inject(cu);
+            ss.apply(s).forEach(cu -> {
                 try {
                     visitor.visit(cu, JavaParserFacade.get(typeSolvers.typeSolver));
                 } catch (Exception e) {
