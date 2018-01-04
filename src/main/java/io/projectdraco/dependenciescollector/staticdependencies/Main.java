@@ -438,7 +438,8 @@ public class Main {
                                          cause.getMessage().contains("String[] String") ||
                                          cause.getMessage().contains("Request org.elasticsearch.action.IndicesRequest") ||
                                          cause.getMessage().contains("Object[] Object") ||
-                                         cause.getMessage().contains("T ?"))) {
+                                         cause.getMessage().contains("T ?") ||
+                                         cause.getMessage().contains("K String"))) {
                                 System.err.println(e.getMessage());
                                 return rt;
                             }
