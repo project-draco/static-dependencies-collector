@@ -252,7 +252,14 @@ public class Main {
             String cupath = getCompilationUnitPath(findCompilationUnit(mc, jp));
             if (cupath.length() == 0) return;
             BodyDeclaration bd = mc.findParent(BodyDeclaration.class).get();
-            System.out.print(fullQualifiedSignature(bd, jp) + " ");
+            String fqs = null;
+            try {
+                fqs = fullQualifiedSignature(bd, jp);
+            } catch (Exception e) {
+                System.err.println("Cannot solve method call " + mc + " " + e.getMessage() + " " + mc.findCompilationUnit().get().getStorage().get().getPath());
+                return;
+            }
+            System.out.print(fqs + " ");
             ResolvedMethodDeclaration rmd = ref.getCorrespondingDeclaration();
             System.out.print(cupath);
             String methodType = "/[MT]/";
@@ -272,13 +279,15 @@ public class Main {
             BodyDeclaration bd = fa.findParent(BodyDeclaration.class).get();
             ResolvedFieldDeclaration rfd = ref.getCorrespondingDeclaration();
             ResolvedTypeDeclaration dt =  null;
+            String fqs = null;
             try {
                 dt = rfd.declaringType();
+                fqs = fullQualifiedSignature(bd, jp);
             } catch (Exception e) {
                 System.err.println("Cannot solve field access " + fa);
                 return;
             }
-            System.out.print(fullQualifiedSignature(bd, jp) + " ");
+            System.out.print(fqs + " ");
             System.out.print(cupath);
             System.out.println(dt.getName() + "/[FE]/" + fa.getName().getId());
         }
@@ -298,14 +307,16 @@ public class Main {
             BodyDeclaration bd = ne.findParent(BodyDeclaration.class).get();
             ResolvedFieldDeclaration rfd = ref.getCorrespondingDeclaration().asField();
             ResolvedTypeDeclaration dt = null;
+            String fqs = null;
             try {
                 dt = rfd.declaringType();
+                fqs = fullQualifiedSignature(bd, jp);
             } catch (Exception e) {
                 // TODO: verify why the ne is empty
                 System.err.println("Empty name expression " + ne);
                 return;
             }
-            System.out.print(fullQualifiedSignature(bd, jp) + " ");
+            System.out.print(fqs + " ");
             System.out.print(getCompilationUnitPath(ne.findCompilationUnit()));
             System.out.println(dt.getName() + "/[FE]/" + ne.getName().getId());
         }
@@ -385,10 +396,16 @@ public class Main {
                     try {
                         ref = ctx.solveType(scopeAsName.getName().getId(), typeSolver);
                     } catch (UnsupportedOperationException e) {
-                        if (e.getMessage().contains("InternalTypes not available for")) {
+                        if (e.getMessage() != null && e.getMessage().contains("InternalTypes not available for")) {
                             return rt;
                         }
                         throw e;
+                    // TODO: investigate the cause of the following exceptions (use elasticsearch to test)
+                    } catch (com.github.javaparser.symbolsolver.javaparsermodel.UnsolvedSymbolException
+                            | com.github.javaparser.resolution.UnsolvedSymbolException
+                            | IllegalArgumentException e) {
+                        System.err.println(e.getMessage());
+                        return rt;
                     }
                 }
                 if (ref == null || !ref.isSolved()) {
@@ -397,6 +414,11 @@ public class Main {
                         typeOfScope = jp.getType(scope.get());
                     } catch (com.github.javaparser.symbolsolver.javaparsermodel.UnsolvedSymbolException
                             | com.github.javaparser.resolution.UnsolvedSymbolException e) {
+                        return rt;
+                    } catch (IllegalArgumentException | IndexOutOfBoundsException | IllegalStateException |
+                            com.github.javaparser.symbolsolver.logic.ConfilictingGenericTypesException e) {
+                        // TODO: investigate the cause of this exceptions (use elasticsearch to test)
+                        System.err.println(e.getMessage());
                         return rt;
                     } catch (RuntimeException e) {
                         Throwable cause = e;
@@ -408,6 +430,15 @@ public class Main {
                             }
                             if (cause.getMessage() != null &&
                                     cause.getMessage().contains("Error calculating the type of parameter")) {
+                                System.err.println(e.getMessage());
+                                return rt;
+                            }
+                            if (cause.getMessage() != null &&
+                                    (cause.getMessage().contains("T ? super T") ||
+                                         cause.getMessage().contains("String[] String") ||
+                                         cause.getMessage().contains("Request org.elasticsearch.action.IndicesRequest") ||
+                                         cause.getMessage().contains("Object[] Object") ||
+                                         cause.getMessage().contains("T ?"))) {
                                 System.err.println(e.getMessage());
                                 return rt;
                             }
@@ -458,6 +489,12 @@ public class Main {
             } else {
                 rt.add(jp.getTypeOfThisIn(node).asReferenceType().getTypeDeclaration());
             }
+        } catch (UnsupportedOperationException
+                | com.github.javaparser.symbolsolver.javaparsermodel.UnsolvedSymbolException
+                | com.github.javaparser.resolution.UnsolvedSymbolException e) {
+            // TODO: investigate the cause of this exceptions (use elasticsearch to test)
+            System.err.println(e.getMessage());
+            return rt;
         } catch (Exception e) {
             throw new RuntimeException(node.toString(), e);
         }
