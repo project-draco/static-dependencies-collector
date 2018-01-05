@@ -63,7 +63,10 @@ public class Main {
             VoidVisitor<TypeSolvers> externalDeclarationsVisitor = new ExternalDeclarationVisitor();
             ss.apply(s).forEach(cu -> {
                 // jss.inject(cu);
-                externalDeclarationsVisitor.visit(cu, typeSolvers);
+                try {
+                    externalDeclarationsVisitor.visit(cu, typeSolvers);
+                } catch (StackOverflowError e) {
+                }
                 if (cu.getImports() != null) {
                     for (ImportDeclaration imp : cu.getImports()) {
                         if (imp.isStatic() && !imp.isAsterisk()) {
@@ -83,6 +86,7 @@ public class Main {
             ss.apply(s).forEach(cu -> {
                 try {
                     visitor.visit(cu, JavaParserFacade.get(typeSolvers.typeSolver));
+                } catch (StackOverflowError e) {
                 } catch (Exception e) {
                     throw new RuntimeException(cu.getStorage().get().getPath().toString(), e);
                 }
@@ -416,7 +420,8 @@ public class Main {
                             | com.github.javaparser.resolution.UnsolvedSymbolException e) {
                         return rt;
                     } catch (IllegalArgumentException | IndexOutOfBoundsException | IllegalStateException |
-                            com.github.javaparser.symbolsolver.logic.ConfilictingGenericTypesException e) {
+                            com.github.javaparser.symbolsolver.logic.ConfilictingGenericTypesException |
+                            MethodAmbiguityException e) {
                         // TODO: investigate the cause of this exceptions (use elasticsearch to test)
                         System.err.println(e.getMessage());
                         return rt;
@@ -439,7 +444,11 @@ public class Main {
                                          cause.getMessage().contains("Request org.elasticsearch.action.IndicesRequest") ||
                                          cause.getMessage().contains("Object[] Object") ||
                                          cause.getMessage().contains("T ?") ||
-                                         cause.getMessage().contains("K String"))) {
+                                         cause.getMessage().contains("K String") ||
+                                         cause.getMessage().contains("com.facebook.presto.spi.block.Block[] java.lang.Object") ||
+                                         cause.getMessage().contains("T java.lang.Object") ||
+                                         cause.getMessage().contains("R ? super T") ||
+                                         cause.getMessage().contains("E ? super T"))) {
                                 System.err.println(e.getMessage());
                                 return rt;
                             }
