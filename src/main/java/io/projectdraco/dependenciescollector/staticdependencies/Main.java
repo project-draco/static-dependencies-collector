@@ -448,7 +448,8 @@ public class Main {
                                          cause.getMessage().contains("com.facebook.presto.spi.block.Block[] java.lang.Object") ||
                                          cause.getMessage().contains("T java.lang.Object") ||
                                          cause.getMessage().contains("R ? super T") ||
-                                         cause.getMessage().contains("E ? super T"))) {
+                                         cause.getMessage().contains("E ? super T") ||
+                                         cause.getMessage().contains("com.google.devtools.build.lib.analysis.TransitiveInfoProvider[] com.google.devtools.build.lib.analysis.TransitiveInfoProvider"))) {
                                 System.err.println(e.getMessage());
                                 return rt;
                             }
@@ -464,6 +465,7 @@ public class Main {
                                 cause = cause.getCause();
                             }
                         }
+                        System.err.println("--->" + e.getStackTrace()[0]);
                         throw e;
                     }
                     if (typeOfScope.isWildcard()) {
@@ -501,7 +503,8 @@ public class Main {
             }
         } catch (UnsupportedOperationException
                 | com.github.javaparser.symbolsolver.javaparsermodel.UnsolvedSymbolException
-                | com.github.javaparser.resolution.UnsolvedSymbolException e) {
+                | com.github.javaparser.resolution.UnsolvedSymbolException
+                | IllegalArgumentException e) {
             // TODO: investigate the cause of this exceptions (use elasticsearch to test)
             System.err.println(e.getMessage());
             return rt;
