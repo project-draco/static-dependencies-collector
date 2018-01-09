@@ -449,7 +449,8 @@ public class Main {
                                          cause.getMessage().contains("T java.lang.Object") ||
                                          cause.getMessage().contains("R ? super T") ||
                                          cause.getMessage().contains("E ? super T") ||
-                                         cause.getMessage().contains("com.google.devtools.build.lib.analysis.TransitiveInfoProvider[] com.google.devtools.build.lib.analysis.TransitiveInfoProvider"))) {
+                                         e.getStackTrace()[0].toString().contains("com.github.javaparser.symbolsolver.javaparsermodel.contexts.MethodCallExprContext.inferTypes") ||
+                                         e.getStackTrace()[0].toString().contains("com.github.javaparser.symbolsolver.javaparsermodel.contexts.MethodCallExprContext.solveMethod"))) {
                                 System.err.println(e.getMessage());
                                 return rt;
                             }
