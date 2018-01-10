@@ -62,6 +62,9 @@ public class Main {
             // collect external superclasses and interfaces
             VoidVisitor<TypeSolvers> externalDeclarationsVisitor = new ExternalDeclarationVisitor();
             ss.apply(s).forEach(cu -> {
+                if (cu == null) {
+                    return;
+                }
                 // jss.inject(cu);
                 try {
                     externalDeclarationsVisitor.visit(cu, typeSolvers);
@@ -84,6 +87,9 @@ public class Main {
             // run printer visitor
             VoidVisitor<JavaParserFacade> visitor = new StaticDependencyPrinter();
             ss.apply(s).forEach(cu -> {
+                if (cu == null) {
+                    return;
+                }
                 try {
                     visitor.visit(cu, JavaParserFacade.get(typeSolvers.typeSolver));
                 } catch (StackOverflowError e) {
@@ -105,6 +111,10 @@ public class Main {
     private static CompilationUnit parse(String path) {
         try {
             return JavaParser.parse(new File(path));
+        } catch (StackOverflowError e) {
+            return null;
+        } catch (RuntimeException e) {
+            return null;
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
