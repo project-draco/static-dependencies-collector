@@ -520,7 +520,8 @@ public class Main {
         } catch (UnsupportedOperationException
                 | com.github.javaparser.symbolsolver.javaparsermodel.UnsolvedSymbolException
                 | com.github.javaparser.resolution.UnsolvedSymbolException
-                | IllegalArgumentException e) {
+                | IllegalArgumentException
+                | com.google.common.util.concurrent.UncheckedExecutionException e) {
             // TODO: investigate the cause of this exceptions (use elasticsearch to test)
             System.err.println(e.getMessage());
             return rt;
