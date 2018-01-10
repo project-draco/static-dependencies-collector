@@ -93,6 +93,11 @@ public class Main {
                 try {
                     visitor.visit(cu, JavaParserFacade.get(typeSolvers.typeSolver));
                 } catch (StackOverflowError e) {
+                } catch (RuntimeException e) {
+                    if (e.getMessage() != null && e.getMessage().contains("parser.updateExpressionExtractor")) {
+                        return;
+                    }
+                    throw e;
                 } catch (Exception e) {
                     throw new RuntimeException(cu.getStorage().get().getPath().toString(), e);
                 }
