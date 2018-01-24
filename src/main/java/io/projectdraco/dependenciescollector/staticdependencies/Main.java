@@ -396,7 +396,11 @@ public class Main {
             if (i != 0) {
                 sb.append(",");
             }
-            String[] arr = md.getParam(i).getType().describe().split("\\.");
+            String description = md.getParam(i).getType().describe();
+            if (description.contains("<")) {
+                description = description.substring(0, description.indexOf("<"));
+            }
+            String[] arr = description.split("\\.");
             sb.append(arr[arr.length-1]);
         }
         sb.append(")");
