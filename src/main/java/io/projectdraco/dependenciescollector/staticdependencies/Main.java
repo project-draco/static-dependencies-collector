@@ -35,6 +35,11 @@ public class Main {
     private static String[] mainArgs;
 
     public static void main(String[] args) throws Exception {
+        boolean inheritance = false;
+        if (args.length > 0 && args[0].equals("--inheritance")) {
+            args = Arrays.copyOfRange(args, 1, args.length);
+            inheritance = true;
+        }
         mainArgs = args;
         TypeSolvers typeSolvers = new TypeSolvers();
         typeSolvers.typeSolver = new CombinedTypeSolver(new ReflectionTypeSolver());
@@ -58,7 +63,6 @@ public class Main {
             JavaParserTypeSolver jpts = new JavaParserTypeSolver(f);
             JavaSymbolSolver jss = new JavaSymbolSolver(jpts);
             typeSolvers.typeSolver.add(jpts);
-
             // collect external superclasses and interfaces
             VoidVisitor<TypeSolvers> externalDeclarationsVisitor = new ExternalDeclarationVisitor();
             ss.apply(s).forEach(cu -> {
@@ -84,8 +88,13 @@ public class Main {
         }
         typeSolvers.typeSolver.add(typeSolvers.externalTypeSolver);
         for (String s : args) {
+            VoidVisitor<JavaParserFacade> visitor;
             // run printer visitor
-            VoidVisitor<JavaParserFacade> visitor = new StaticDependencyPrinter();
+            if (inheritance) {
+                visitor = new InheritancePrinter();
+            } else {
+                visitor = new StaticDependencyPrinter();
+            }
             ss.apply(s).forEach(cu -> {
                 if (cu == null) {
                     return;
@@ -94,7 +103,8 @@ public class Main {
                     visitor.visit(cu, JavaParserFacade.get(typeSolvers.typeSolver));
                 } catch (StackOverflowError e) {
                 } catch (RuntimeException e) {
-                    if (e.getMessage() != null && e.getMessage().contains("parser.updateExpressionExtractor")) {
+                    if (e.getMessage() != null &&
+                            e.getMessage().contains("parser.updateExpressionExtractor")) {
                         return;
                     }
                     throw e;
@@ -338,6 +348,27 @@ public class Main {
             System.out.print(fqs + " ");
             System.out.print(getCompilationUnitPath(ne.findCompilationUnit()));
             System.out.println(dt.getName() + "/[FE]/" + ne.getName().getId());
+        }
+    }
+
+    private static class InheritancePrinter extends VoidVisitorAdapter<JavaParserFacade> {
+
+        @Override
+        public void visit(ClassOrInterfaceDeclaration cd, JavaParserFacade jp) {
+            for (ClassOrInterfaceType extendedType : cd.getExtendedTypes()) {
+                Context ctx = JavaParserFactory.getContext(cd, jp.getTypeSolver());
+                String name = extendedType.getNameAsString();
+                SymbolReference<ResolvedTypeDeclaration> ref = ctx.solveType(name, jp.getTypeSolver());
+                if (ref.isSolved()) {
+                    System.out.print(getCompilationUnitPath(cd.findCompilationUnit()) + "\t");
+                    ResolvedReferenceTypeDeclaration rrtd =
+                        ref.getCorrespondingDeclaration().asReferenceType();
+                    Optional<CompilationUnit> cu = findCompilationUnit(rrtd);
+                    if (cu.isPresent()) {
+                        System.out.println(getCompilationUnitPath(cu));
+                    }
+                }
+            }
         }
     }
 
