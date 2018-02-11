@@ -360,11 +360,11 @@ public class Main {
                 String name = extendedType.getNameAsString();
                 SymbolReference<ResolvedTypeDeclaration> ref = ctx.solveType(name, jp.getTypeSolver());
                 if (ref.isSolved()) {
-                    System.out.print(getCompilationUnitPath(cd.findCompilationUnit()) + "\t");
                     ResolvedReferenceTypeDeclaration rrtd =
                         ref.getCorrespondingDeclaration().asReferenceType();
                     Optional<CompilationUnit> cu = findCompilationUnit(rrtd);
                     if (cu.isPresent()) {
+                        System.out.print(getCompilationUnitPath(cd.findCompilationUnit()) + "\t");
                         System.out.println(getCompilationUnitPath(cu));
                     }
                 }
