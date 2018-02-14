@@ -36,9 +36,11 @@ public class Main {
 
     public static void main(String[] args) throws Exception {
         boolean inheritance = false;
-        if (args.length > 0 && args[0].equals("--inheritance")) {
+        boolean fieldTypes = false;
+        if (args.length > 0 && (args[0].equals("--inheritance") || args[0].equals("--field-types"))) {
+            inheritance = args[0].equals("--inheritance");
+            fieldTypes = args[0].equals("--field-types");
             args = Arrays.copyOfRange(args, 1, args.length);
-            inheritance = true;
         }
         mainArgs = args;
         TypeSolvers typeSolvers = new TypeSolvers();
@@ -92,6 +94,8 @@ public class Main {
             // run printer visitor
             if (inheritance) {
                 visitor = new InheritancePrinter();
+            } else if (fieldTypes) {
+                visitor = new FieldTypesPrinter();
             } else {
                 visitor = new StaticDependencyPrinter();
             }
@@ -365,6 +369,28 @@ public class Main {
                     Optional<CompilationUnit> cu = findCompilationUnit(rrtd);
                     if (cu.isPresent()) {
                         System.out.print(getCompilationUnitPath(cd.findCompilationUnit()) + "\t");
+                        System.out.println(getCompilationUnitPath(cu));
+                    }
+                }
+            }
+        }
+    }
+
+    private static class FieldTypesPrinter extends VoidVisitorAdapter<JavaParserFacade> {
+
+        @Override
+        public void visit(FieldDeclaration fd, JavaParserFacade jp) {
+            com.github.javaparser.ast.type.Type t = fd.getVariable(0).getType();
+            if (t.isClassOrInterfaceType()) {
+                Context ctx = JavaParserFactory.getContext(fd, jp.getTypeSolver());
+                SymbolReference<ResolvedTypeDeclaration> ref =
+                    ctx.solveType(t.asClassOrInterfaceType().getNameAsString(), jp.getTypeSolver());
+                if (ref.isSolved()) {
+                    ResolvedReferenceTypeDeclaration rrtd =
+                        ref.getCorrespondingDeclaration().asReferenceType();
+                    Optional<CompilationUnit> cu = findCompilationUnit(rrtd);
+                    if (cu.isPresent()) {
+                        System.out.print(fullQualifiedSignature(fd, jp) + "\t");
                         System.out.println(getCompilationUnitPath(cu));
                     }
                 }
