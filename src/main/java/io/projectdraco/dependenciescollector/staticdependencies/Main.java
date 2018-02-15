@@ -366,6 +366,9 @@ public class Main {
                 if (ref.isSolved()) {
                     ResolvedReferenceTypeDeclaration rrtd =
                         ref.getCorrespondingDeclaration().asReferenceType();
+                    if (!(rrtd instanceof JavaParserClassDeclaration)) {
+                        continue;
+                    }
                     Optional<CompilationUnit> cu = findCompilationUnit(rrtd);
                     if (cu.isPresent()) {
                         System.out.print(getCompilationUnitPath(cd.findCompilationUnit()) + "\t");
