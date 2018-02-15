@@ -386,16 +386,22 @@ public class Main {
             com.github.javaparser.ast.type.Type t = fd.getVariable(0).getType();
             if (t.isClassOrInterfaceType()) {
                 Context ctx = JavaParserFactory.getContext(fd, jp.getTypeSolver());
-                SymbolReference<ResolvedTypeDeclaration> ref =
-                    ctx.solveType(t.asClassOrInterfaceType().getNameAsString(), jp.getTypeSolver());
-                if (ref.isSolved()) {
-                    ResolvedReferenceTypeDeclaration rrtd =
-                        ref.getCorrespondingDeclaration().asReferenceType();
-                    Optional<CompilationUnit> cu = findCompilationUnit(rrtd);
-                    if (cu.isPresent()) {
-                        System.out.print(fullQualifiedSignature(fd, jp) + "\t");
-                        System.out.println(getCompilationUnitPath(cu));
+                try {
+                    SymbolReference<ResolvedTypeDeclaration> ref =
+                        ctx.solveType(t.asClassOrInterfaceType().getNameAsString(), jp.getTypeSolver());
+                    if (ref.isSolved()) {
+                        ResolvedReferenceTypeDeclaration rrtd =
+                            ref.getCorrespondingDeclaration().asReferenceType();
+                        if (!(rrtd instanceof JavaParserClassDeclaration)) {
+                            return;
+                        }
+                        Optional<CompilationUnit> cu = findCompilationUnit(rrtd);
+                        if (cu.isPresent()) {
+                            System.out.print(fullQualifiedSignature(fd, jp) + "\t");
+                            System.out.println(getCompilationUnitPath(cu));
+                        }
                     }
+                } catch (UnsupportedOperationException e) {
                 }
             }
         }
@@ -599,7 +605,8 @@ public class Main {
         if (!cu.isPresent() || !cu.get().getStorage().isPresent()) return "";
         String path = cu.get().getStorage().get().getPath().toString();
         for (String s : mainArgs) {
-            path = path.replace(s, "");
+            if (!path.contains(s)) continue;
+            path = path.replace(path.substring(0, path.indexOf(s)+s.length()), "");
         }
         if (path.length() > 0 && path.charAt(0) == '/') path = path.substring(1);
         return path.replaceAll("/", "_") + "/[CN]/";
