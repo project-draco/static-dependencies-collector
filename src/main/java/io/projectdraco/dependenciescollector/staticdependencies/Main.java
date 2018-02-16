@@ -362,18 +362,22 @@ public class Main {
             for (ClassOrInterfaceType extendedType : cd.getExtendedTypes()) {
                 Context ctx = JavaParserFactory.getContext(cd, jp.getTypeSolver());
                 String name = extendedType.getNameAsString();
-                SymbolReference<ResolvedTypeDeclaration> ref = ctx.solveType(name, jp.getTypeSolver());
-                if (ref.isSolved()) {
-                    ResolvedReferenceTypeDeclaration rrtd =
-                        ref.getCorrespondingDeclaration().asReferenceType();
-                    if (!(rrtd instanceof JavaParserClassDeclaration)) {
-                        continue;
+                try {
+                    SymbolReference<ResolvedTypeDeclaration> ref = ctx.solveType(name, jp.getTypeSolver());
+                    if (ref.isSolved()) {
+                        ResolvedReferenceTypeDeclaration rrtd =
+                            ref.getCorrespondingDeclaration().asReferenceType();
+                        if (!(rrtd instanceof JavaParserClassDeclaration)) {
+                            continue;
+                        }
+                        Optional<CompilationUnit> cu = findCompilationUnit(rrtd);
+                        if (cu.isPresent()) {
+                            System.out.print(getCompilationUnitPath(cd.findCompilationUnit()) + "\t");
+                            System.out.println(getCompilationUnitPath(cu));
+                        }
                     }
-                    Optional<CompilationUnit> cu = findCompilationUnit(rrtd);
-                    if (cu.isPresent()) {
-                        System.out.print(getCompilationUnitPath(cd.findCompilationUnit()) + "\t");
-                        System.out.println(getCompilationUnitPath(cu));
-                    }
+                } catch (com.github.javaparser.symbolsolver.javaparsermodel.UnsolvedSymbolException e) {
+                } catch (IllegalArgumentException e) {
                 }
             }
         }
@@ -402,6 +406,8 @@ public class Main {
                         }
                     }
                 } catch (UnsupportedOperationException e) {
+                } catch (com.github.javaparser.symbolsolver.javaparsermodel.UnsolvedSymbolException e) {
+                } catch (IllegalArgumentException e) {
                 }
             }
         }
