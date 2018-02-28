@@ -389,8 +389,8 @@ public class Main {
         public void visit(FieldDeclaration fd, JavaParserFacade jp) {
             com.github.javaparser.ast.type.Type t = fd.getVariable(0).getType();
             if (t.isClassOrInterfaceType()) {
-                Context ctx = JavaParserFactory.getContext(fd, jp.getTypeSolver());
                 try {
+                    Context ctx = JavaParserFactory.getContext(fd, jp.getTypeSolver());
                     SymbolReference<ResolvedTypeDeclaration> ref =
                         ctx.solveType(t.asClassOrInterfaceType().getNameAsString(), jp.getTypeSolver());
                     if (ref.isSolved()) {
@@ -407,6 +407,7 @@ public class Main {
                     }
                 } catch (UnsupportedOperationException e) {
                 } catch (com.github.javaparser.symbolsolver.javaparsermodel.UnsolvedSymbolException e) {
+                } catch (com.github.javaparser.resolution.UnsolvedSymbolException e) {
                 } catch (IllegalArgumentException e) {
                 }
             }
