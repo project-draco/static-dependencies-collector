@@ -377,6 +377,7 @@ public class Main {
                         }
                     }
                 } catch (com.github.javaparser.symbolsolver.javaparsermodel.UnsolvedSymbolException e) {
+                } catch (com.github.javaparser.resolution.UnsolvedSymbolException e) {
                 } catch (IllegalArgumentException e) {
                 }
             }
